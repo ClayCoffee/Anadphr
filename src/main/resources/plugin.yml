@@ -1,0 +1,6 @@
+name: Anadphr
+version: '1.0.0'
+main: cn.claycoffee.anadphr.AnadphrCore
+api-version: '1.21'
+load: STARTUP
+authors: [ ClayCoffee ]
