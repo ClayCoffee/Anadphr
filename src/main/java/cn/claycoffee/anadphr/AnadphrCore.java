@@ -1,26 +1,26 @@
 package cn.claycoffee.anadphr;
 
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.BiomeSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.CaveSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.OreSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.TerrainSettings;
-import org.bukkit.Server; // 引入 Server
+import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
+import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
+import cn.claycoffee.anadphr.planet.anadphr.generation.CustomChunkGenerator;
+import cn.claycoffee.anadphr.settings.BiomeSettings;
+import cn.claycoffee.anadphr.settings.TerrainSettings;
+import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import cn.claycoffee.anadphr.planet.anadphr.generation.*;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap; // 使用 ConcurrentHashMap
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * 主插件类，负责注册自定义世界生成器 {@link AnadphrGenerator}。
- * 它使用线程安全的 {@link ConcurrentHashMap} 来缓存每个世界的 {@link GeneratorCore} 实例，
+ * 主插件类，负责注册自定义世界生成器 {@link AnadphrChunkGenerator}。
+ * 它使用线程安全的 {@link ConcurrentHashMap} 来缓存每个世界的 {@link NoiseGeneratorCore} 实例，
  * 以支持多世界配置和 Folia 的并发环境。
  * 可以通过配置文件（如果实现）或基于世界名/ID 加载不同的生成设置。
  */
@@ -33,7 +33,7 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
      * Key: 世界名称 (String)
      * Value: 该世界的 GeneratorCore 实例 (GeneratorCore)
      */
-    private final Map<String, GeneratorCore> worldCores = new ConcurrentHashMap<>();
+    private final Map<String, NoiseGeneratorCore> worldCores = new ConcurrentHashMap<>();
 
     @Override
     public void onEnable() {
@@ -56,13 +56,13 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
     /**
      * Bukkit 调用此方法为指定世界获取区块生成器实例。
      * 这是插件与 Bukkit 世界生成机制交互的主要入口点。
-     * 此实现是线程安全的，它原子性地查找或创建与世界名关联的 {@link GeneratorCore}，
-     * 并将其注入到新的 {@link AnadphrGenerator} 实例中。
+     * 此实现是线程安全的，它原子性地查找或创建与世界名关联的 {@link NoiseGeneratorCore}，
+     * 并将其注入到新的 {@link AnadphrChunkGenerator} 实例中。
      *
      * @param worldName 请求生成器的世界名称。不能为空。
      * @param id        可选的生成器 ID (例如来自命令 `-g PluginName:id`)。可以为 null。
      * 此 ID 可用于加载特定的世界生成配置。
-     * @return 一个配置好的 {@link AnadphrGenerator} 实例。在极少数初始化失败的情况下可能返回 null。
+     * @return 一个配置好的 {@link AnadphrChunkGenerator} 实例。在极少数初始化失败的情况下可能返回 null。
      */
     @Override
     @Nullable // 返回值理论上不为 null，除非 Core 创建失败
@@ -72,29 +72,21 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
 
             // 使用 ConcurrentHashMap.computeIfAbsent 来原子性地获取或创建 GeneratorCore
             // Lambda 表达式只在 Key 不存在时执行，保证了 Core 的单例性（每个世界一个）和线程安全
-            GeneratorCore coreToUse = worldCores.computeIfAbsent(worldName, wn -> {
+            NoiseGeneratorCore coreToUse = worldCores.computeIfAbsent(worldName, wn -> {
                 LOGGER.info("缓存未命中，将为世界 '" + wn + "' 创建新的 GeneratorCore...");
-                // 1. 确定种子 (线程安全)
                 long seed = determineSeed(wn);
-                // 2. 确定世界高度限制 (线程安全)
                 WorldHeight limits = determineWorldHeight(wn);
 
-                // --- 核心配置选择逻辑 ---
-                // 这里应该根据传入的 id (或其他配置源) 来选择加载不同的 Settings 对象
-                // 当前示例：无论 id 是什么，都使用默认设置
-                // TODO: 实现基于 id 或配置文件的 Settings 加载逻辑
+                // TODO: 多个星球
                 LOGGER.info("正在为世界 '" + wn + "' 加载生成设置 (当前使用默认)...");
-                TerrainSettings terrainSettings = TerrainSettings.getDefault(limits.minHeight, limits.maxHeight);
-                CaveSettings caveSettings = CaveSettings.DEFAULT;
-                BiomeSettings biomeSettings = BiomeSettings.getDefault();
-                OreSettings oreSettings = OreSettings.getDefault();
+                TerrainSettings terrainSettings = TerrainSettings.getAnadphrSettings(limits.minHeight, limits.maxHeight);
+                BiomeSettings biomeSettings = BiomeSettings.ANADPHR;
                 LOGGER.info("使用种子 " + seed + ", 高度 [" + limits.minHeight + ", " + limits.maxHeight + "], 和默认设置创建 Core。");
 
                 // 创建并返回新的 GeneratorCore 实例
                 // 这个实例会被放入 ConcurrentHashMap 中
                 try {
-                    return new GeneratorCore(seed, limits.minHeight, limits.maxHeight,
-                            terrainSettings, caveSettings, biomeSettings, oreSettings);
+                    return new NoiseGeneratorCore(seed, terrainSettings, biomeSettings);
                 } catch (Exception e) {
                     // 如果 Core 创建失败 (例如参数验证失败)，记录严重错误并返回 null
                     LOGGER.log(Level.SEVERE, "为世界 '" + wn + "' 创建 GeneratorCore 时失败!", e);
@@ -110,7 +102,7 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
 
             // 返回注入了正确 GeneratorCore 的 MyChunkGenerator 实例
             LOGGER.info("为世界 '" + worldName + "' 提供了配置好的 MyChunkGenerator 实例。");
-            return new AnadphrGenerator(coreToUse);
+            return new CustomChunkGenerator(coreToUse);
         }
         return null;
     }

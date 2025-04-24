@@ -1,34 +1,29 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation;
+package cn.claycoffee.anadphr.core;
 
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.BiomeSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.CaveSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.OreSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.TerrainSettings;
+import cn.claycoffee.anadphr.settings.BiomeSettings;
+import cn.claycoffee.anadphr.settings.TerrainSettings;
 import org.bukkit.Material;
 import org.bukkit.util.noise.SimplexNoiseGenerator;
 import org.bukkit.util.noise.SimplexOctaveGenerator;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
-import java.util.Random; // 仅用于初始化噪声和确定性随机
+import java.util.Random;
 
 /**
  * 封装世界生成的核心逻辑、配置和噪声生成器。
  * 设计为线程安全：不持有可变状态（除final字段），不使用共享 Random 实例进行生成。
  * 通过构造函数接收所有配置对象。
  */
-public final class GeneratorCore { // 标记为 final
+public final class NoiseGeneratorCore { // 标记为 final
 
     // --- 配置实例 (final, 保证线程安全) ---
     @NotNull public final TerrainSettings terrainSettings;
-    @NotNull public final CaveSettings caveSettings;
     @NotNull public final BiomeSettings biomeSettings;
-    @NotNull public final OreSettings oreSettings;
 
     // --- 噪声生成器 (final, 线程安全) ---
     private final SimplexOctaveGenerator baseTerrainNoise;
     private final SimplexOctaveGenerator detailTerrainNoise;
-    private final SimplexNoiseGenerator caveNoise;
     private final SimplexNoiseGenerator temperatureNoise;
     private final SimplexNoiseGenerator humidityNoise;
     private final SimplexOctaveGenerator continentalnessNoise;
@@ -36,6 +31,8 @@ public final class GeneratorCore { // 标记为 final
     private final SimplexOctaveGenerator erosionNoise;
     private final SimplexOctaveGenerator peaksValleysNoise;
     private final SimplexOctaveGenerator weirdnessNoise;
+
+    private final long seed;
 
     // 用于确定性随机的种子 (从主种子派生)
     private final long deterministicRandSeed;
@@ -45,24 +42,18 @@ public final class GeneratorCore { // 标记为 final
      * 此构造函数负责初始化所有基于种子和配置的噪声生成器。
      *
      * @param seed            世界种子，用于初始化所有噪声生成器以确保确定性。
-     * @param minWorldHeight  当前世界允许的最低Y值。
-     * @param maxWorldHeight  当前世界允许的最高Y值。
      * @param terrainSettings 地形生成配置。不能为空。
-     * @param caveSettings    洞穴生成配置。不能为空。
      * @param biomeSettings   生物群系生成配置。不能为空。
-     * @param oreSettings     矿物生成配置。不能为空。
      * @throws NullPointerException 如果任何 Settings 对象为 null。
      */
-    public GeneratorCore(long seed, int minWorldHeight, int maxWorldHeight,
-                         @NotNull TerrainSettings terrainSettings, @NotNull CaveSettings caveSettings,
-                         @NotNull BiomeSettings biomeSettings, @NotNull OreSettings oreSettings) {
+    public NoiseGeneratorCore(long seed,
+                              @NotNull TerrainSettings terrainSettings, @NotNull BiomeSettings biomeSettings) {
 
         // 校验并存储传入的配置
         this.terrainSettings = Objects.requireNonNull(terrainSettings, "TerrainSettings cannot be null");
-        this.caveSettings = Objects.requireNonNull(caveSettings, "CaveSettings cannot be null");
         this.biomeSettings = Objects.requireNonNull(biomeSettings, "BiomeSettings cannot be null");
-        this.oreSettings = Objects.requireNonNull(oreSettings, "OreSettings cannot be null");
 
+        this.seed = seed;
         // 从主种子派生用于确定性随机的种子
         this.deterministicRandSeed = seed * 31L + 11L; // 简单的派生方式
 
@@ -70,7 +61,6 @@ public final class GeneratorCore { // 标记为 final
         // 使用不同的种子偏移量确保每个噪声函数的独立性
         this.baseTerrainNoise = createOctaveGenerator(seed + 1, this.terrainSettings.baseOctaves, this.terrainSettings.baseFreq);
         this.detailTerrainNoise = createOctaveGenerator(seed + 2, this.terrainSettings.detailOctaves, this.terrainSettings.detailFreq);
-        this.caveNoise = new SimplexNoiseGenerator(new Random(seed + 3));
         this.temperatureNoise = new SimplexNoiseGenerator(new Random(seed + 4));
         this.humidityNoise = new SimplexNoiseGenerator(new Random(seed + 5));
         this.continentalnessNoise = createOctaveGenerator(seed + 6, this.terrainSettings.continentalnessOctaves, this.terrainSettings.continentalnessFreq);
@@ -78,6 +68,14 @@ public final class GeneratorCore { // 标记为 final
         this.erosionNoise = createOctaveGenerator(seed + 8, this.terrainSettings.erosionOctaves, this.terrainSettings.erosionFreq);
         this.peaksValleysNoise = createOctaveGenerator(seed + 9, this.terrainSettings.peaksValleysOctaves, this.terrainSettings.peaksValleysFreq);
         this.weirdnessNoise = createOctaveGenerator(seed + 10, this.terrainSettings.weirdnessOctaves, this.terrainSettings.weirdnessFreq);
+    }
+
+    public int getMinWorldHeight() {
+        return terrainSettings.minHeight;
+    }
+
+    public int getMaxWorldHeight() {
+        return terrainSettings.maxHeight;
     }
 
     /**
@@ -118,25 +116,6 @@ public final class GeneratorCore { // 标记为 final
         // 使用 Math.clamp (如果 Java 版本支持) 或 Math.max/min 限制高度
         // return Math.clamp(finalHeight, terrainSettings.minHeight + 1, terrainSettings.maxHeight - 1);
         return Math.max(terrainSettings.minHeight + 1, Math.min(finalHeight, terrainSettings.maxHeight - 1));
-    }
-
-    /**
-     * 判断指定 (X, Y, Z) 坐标是否应为洞穴。
-     * 基于 3D Simplex 噪声值与 {@link CaveSettings#threshold} 的比较。
-     * 设计为线程安全的。
-     * @param x 世界 X 坐标。
-     * @param y 世界 Y 坐标。
-     * @param z 世界 Z 坐标。
-     * @return 如果该点的噪声值超过阈值，则返回 true，表示是洞穴。
-     */
-    public boolean isCave(int x, int y, int z) {
-        // 计算 3D 噪声值
-        final double noiseValue = caveNoise.noise(
-                x * caveSettings.frequency,
-                y * caveSettings.frequency,
-                z * caveSettings.frequency);
-        // 比较阈值
-        return noiseValue > caveSettings.threshold;
     }
 
     /**
@@ -227,4 +206,12 @@ public final class GeneratorCore { // 标记为 final
             double temperature, double humidity, double continentalness,
             double erosion, double peaksValleys, double weirdness, double dither
     ) {}
+
+    public long getSeed() {
+        return seed;
+    }
+
+    public long getDeterministicRandSeed() {
+        return deterministicRandSeed;
+    }
 }

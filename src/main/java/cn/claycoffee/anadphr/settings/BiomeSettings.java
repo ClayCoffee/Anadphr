@@ -1,10 +1,11 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.settings;
+package cn.claycoffee.anadphr.settings;
 
 import org.bukkit.block.Biome;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*; // 引入 util.*
+import java.util.List;
+import java.util.Objects;
 
 /**
  * 生物群系生成参数配置 (不可变)。
@@ -79,7 +80,7 @@ public final class BiomeSettings { // 标记为 final
         this.riverCheckMaxAltitudeOffset = riverCheckMaxAltitudeOffset;
         this.riverErosionThreshold = riverErosionThreshold;
         // 防御性复制，确保列表不可变
-        this.allowedBiomes = allowedBiomes != null ? Collections.unmodifiableList(new ArrayList<>(allowedBiomes)) : getDefaultAllowedBiomes();
+        this.allowedBiomes = allowedBiomes != null ? List.copyOf(allowedBiomes) : getDefaultAllowedBiomes();
     }
 
     /**
@@ -110,24 +111,16 @@ public final class BiomeSettings { // 标记为 final
         );
     }
 
-    /**
-     * 获取一个具有推荐默认参数的生物群系设置实例。
-     * 这些默认值提供了一个基础的、相对平衡的生物群系分布。
-     * @return 一个配置好的、不可变的 {@link BiomeSettings} 实例。
-     */
-    @NotNull
-    public static BiomeSettings getDefault() {
-        // 使用推荐的默认参数值
-        return new BiomeSettings(
+
+    public static BiomeSettings ANADPHR = new BiomeSettings(
                 0.005, // temperatureFrequency
-                0.006, // humidityFrequency
-                0.005, // altitudeLapseRate
-                0.07,  // transitionDitherScale
-                3,     // riverCheckMaxAltitudeOffset
-                -0.4,  // riverErosionThreshold
-                null   // 使用默认的 allowedBiomes 列表
-        );
-    }
+                        0.006, // humidityFrequency
+                        0.005, // altitudeLapseRate
+                        0.07,  // transitionDitherScale
+                        3,     // riverCheckMaxAltitudeOffset
+                        -0.4,  // riverErosionThreshold
+                        null   // 使用默认的 allowedBiomes 列表
+    );
 
     // 辅助枚举: 气候带，用于简化逻辑
     private enum ClimateZone { FROZEN, COLD, TEMPERATE, HOT }

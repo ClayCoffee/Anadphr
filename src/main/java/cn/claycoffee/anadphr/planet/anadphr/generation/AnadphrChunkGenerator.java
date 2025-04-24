@@ -1,20 +1,18 @@
 package cn.claycoffee.anadphr.planet.anadphr.generation;
 
-import cn.claycoffee.anadphr.planet.anadphr.generation.biomes.MyBiomeProvider;
-import cn.claycoffee.anadphr.planet.anadphr.generation.populators.OrePopulator;
-import cn.claycoffee.anadphr.planet.anadphr.generation.populators.RiverPopulator;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.BiomeSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.CaveSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.OreSettings;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.TerrainSettings;
+import cn.claycoffee.anadphr.biomes.BiomeProvider;
+import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
+import cn.claycoffee.anadphr.settings.BiomeSettings;
+import cn.claycoffee.anadphr.settings.TerrainSettings;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
-import org.bukkit.generator.*;
+import org.bukkit.generator.BlockPopulator;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.generator.WorldInfo;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Random;
@@ -22,39 +20,35 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * 自定义区块生成器实现 (线程安全设计)。
- * 负责调用 {@link GeneratorCore} 来执行实际的地形和洞穴生成，
+ * 自定义区块生成器的抽象实现 (线程安全设计)。
+ * 负责调用 {@link NoiseGeneratorCore} 来执行实际的地形生成，
  * 并协调地表生成和 BlockPopulator 的执行。
  * 使用双重检查锁定模式安全地延迟初始化 GeneratorCore。
  */
-public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
+public abstract class AnadphrChunkGenerator extends ChunkGenerator { // 标记为 final
 
-    private static final Logger LOGGER = Logger.getLogger("MyChunkGenerator");
+    static final Logger LOGGER = Logger.getLogger("MyChunkGenerator");
 
     // GeneratorCore 实例，可能延迟初始化
     @Nullable
-    private volatile GeneratorCore core; // 使用 volatile 保证多线程可见性
+    private volatile NoiseGeneratorCore core; // 使用 volatile 保证多线程可见性
 
     // 缓存 Provider 和 Populator 实例 (volatile 确保可见性)
     @Nullable
-    private volatile MyBiomeProvider biomeProviderInstance;
-    @Nullable
-    private volatile RiverPopulator riverPopulatorInstance;
-    @Nullable
-    private volatile OrePopulator orePopulatorInstance;
+    private volatile BiomeProvider biomeProviderInstance;
 
     // 用于 core 延迟初始化的锁对象 (final)
-    private final Object coreInitLock = new Object();
+    protected final Object coreInitLock = new Object();
 
 
     /**
      * 创建一个 ChunkGenerator 实例，并可选择性地注入一个预配置的 GeneratorCore。
      * 这允许为不同的世界使用不同的生成参数。
      *
-     * @param core 一个配置好的 {@link GeneratorCore} 实例。如果为 null，将在首次需要时使用默认设置创建。
+     * @param core 一个配置好的 {@link NoiseGeneratorCore} 实例。如果为 null，将在首次需要时使用默认设置创建。
      * 传入的 core 必须是完整初始化的。
      */
-    public AnadphrGenerator(@Nullable GeneratorCore core) {
+    public AnadphrChunkGenerator(@Nullable NoiseGeneratorCore core) {
         // 直接赋值，初始化将在需要时进行检查
         this.core = core;
     }
@@ -63,7 +57,7 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      * 默认构造函数。将在首次生成区块时使用默认设置初始化 GeneratorCore。
      * 通常用于通过 plugin.yml 直接指定生成器名称的情况。
      */
-    public AnadphrGenerator() {
+    public AnadphrChunkGenerator() {
         this(null);
     }
 
@@ -86,12 +80,10 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
                     int maxHeight = worldInfo.getMaxHeight();
                     try {
                         // 使用默认设置创建 Core
-                        this.core = new GeneratorCore(
-                                seed, minHeight, maxHeight,
-                                TerrainSettings.getDefault(minHeight, maxHeight),
-                                CaveSettings.DEFAULT,
-                                BiomeSettings.getDefault(),
-                                OreSettings.getDefault()
+                        this.core = new NoiseGeneratorCore(
+                                seed,
+                                TerrainSettings.getAnadphrSettings(minHeight, maxHeight),
+                                BiomeSettings.ANADPHR
                         );
                         LOGGER.info("[WorldGen] 默认 GeneratorCore 初始化完成 (种子: " + seed + ")");
                     } catch (Exception e) {
@@ -112,8 +104,7 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      * @return 返回已初始化的 GeneratorCore 实例。
      * @throws IllegalStateException 如果 GeneratorCore 初始化失败。
      */
-    @NotNull
-    private GeneratorCore getCore(@NotNull WorldInfo worldInfo) {
+    @NotNull NoiseGeneratorCore getCore(@NotNull WorldInfo worldInfo) {
         // 确保初始化
         initializeCoreIfNeeded(worldInfo);
         // 此时 core 不应为 null，如果为 null 则初始化已失败
@@ -121,10 +112,19 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
         return Objects.requireNonNull(this.core, "GeneratorCore instance is null after initialization check!");
     }
 
+    /**
+     * 获取已初始化的 GeneratorCore 实例 (线程安全)。
+     *
+     * @return 返回已初始化的 GeneratorCore 实例。
+     */
+    public @NotNull NoiseGeneratorCore getCore() {
+        return Objects.requireNonNull(this.core, "GeneratorCore instance is null after initialization check!");
+    }
+
 
     /**
      * 生成区块的基础地形噪声和洞穴 (线程安全)。
-     * 调用 {@link GeneratorCore} 中的方法执行计算。
+     * 调用 {@link NoiseGeneratorCore} 中的方法执行计算。
      *
      * @param worldInfo 世界信息。
      * @param random    Bukkit 提供的用于此区块生成的 Random 实例 (未使用，因为 Core 内使用确定性随机)。
@@ -134,7 +134,7 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      */
     @Override
     public void generateNoise(@NotNull WorldInfo worldInfo, @NotNull Random random, int chunkX, int chunkZ, @NotNull ChunkData chunkData) {
-        final GeneratorCore currentCore = getCore(worldInfo); // 获取 Core (会触发初始化如果需要)
+        final NoiseGeneratorCore currentCore = getCore(worldInfo); // 获取 Core (会触发初始化如果需要)
         final int seaLevel = currentCore.terrainSettings.seaLevel;
         final int minHeight = worldInfo.getMinHeight();
         final int maxHeight = worldInfo.getMaxHeight();
@@ -150,12 +150,8 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
 
                 for (int y = minHeight + 1; y < terrainHeight; y++) {
                     if (y >= maxHeight) break; // 超出高度则停止此列
-                    if (currentCore.isCave(worldX, y, worldZ)) {
-                        chunkData.setBlock(x, y, z, Material.AIR);
-                    } else {
-                        // 使用世界坐标进行确定性随机获取材质
-                        chunkData.setBlock(x, y, z, currentCore.getBaseMaterial(y, terrainHeight, worldX, worldZ));
-                    }
+                    // 使用世界坐标进行确定性随机获取材质
+                    chunkData.setBlock(x, y, z, currentCore.getBaseMaterial(y, terrainHeight, worldX, worldZ));
                 }
                 // 填充水体 (海洋/湖泊)
                 if (terrainHeight <= seaLevel) {
@@ -174,7 +170,7 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
 
     /**
      * 生成区块的地表覆盖 (线程安全)。
-     * 依赖 {@link MyBiomeProvider} 获取生物群系。
+     * 依赖 {@link BiomeProvider} 获取生物群系。
      *
      * @param worldInfo 世界信息。
      * @param random    Bukkit 提供的 Random 实例 (未使用)。
@@ -184,8 +180,8 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      */
     @Override
     public void generateSurface(@NotNull WorldInfo worldInfo, @NotNull Random random, int chunkX, int chunkZ, @NotNull ChunkData chunkData) {
-        final GeneratorCore currentCore = getCore(worldInfo);
-        final MyBiomeProvider currentBiomeProvider = getCachedBiomeProvider(worldInfo);
+        final NoiseGeneratorCore currentCore = getCore(worldInfo);
+        final BiomeProvider currentBiomeProvider = getCachedBiomeProvider(worldInfo);
         // 如果 BiomeProvider 获取失败，则无法进行地表生成
         if (currentBiomeProvider == null) {
             LOGGER.warning("[WorldGen] BiomeProvider is null, skipping surface generation for chunk " + chunkX + "," + chunkZ);
@@ -398,11 +394,11 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      * 获取此生成器使用的 BiomeProvider。
      * 使用双重检查锁定模式安全地获取或创建缓存的实例。
      * @param worldInfo 世界信息。
-     * @return 自定义的 {@link MyBiomeProvider} 实例，如果初始化失败则返回 null。
+     * @return 自定义的 {@link BiomeProvider} 实例，如果初始化失败则返回 null。
      */
     @Override
     @Nullable
-    public BiomeProvider getDefaultBiomeProvider(@NotNull WorldInfo worldInfo) {
+    public org.bukkit.generator.BiomeProvider getDefaultBiomeProvider(@NotNull WorldInfo worldInfo) {
         return getCachedBiomeProvider(worldInfo); // 使用辅助方法获取
     }
 
@@ -414,40 +410,7 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      * @return 包含自定义 Populator (RiverPopulator, OrePopulator) 的列表。如果 Core 初始化失败则为空列表。
      */
     @Override
-    public @NotNull List<BlockPopulator> getDefaultPopulators(@NotNull World worldInfo) {
-        final GeneratorCore currentCore;
-        try {
-            currentCore = getCore(worldInfo); // 获取 Core，会触发初始化
-        } catch (IllegalStateException e) {
-            LOGGER.log(Level.SEVERE, "无法获取 GeneratorCore，无法提供 Populators！", e);
-            return List.of(); // 返回空列表
-        }
-
-        // --- 双重检查锁定获取 Populator 实例 ---
-        RiverPopulator riverPop = this.riverPopulatorInstance; // 先读 volatile 变量
-        if (riverPop == null) {
-            synchronized (coreInitLock) {
-                riverPop = this.riverPopulatorInstance; // 再次读取
-                if (riverPop == null) {
-                    riverPop = new RiverPopulator(currentCore);
-                    this.riverPopulatorInstance = riverPop; // 写 volatile 变量
-                }
-            }
-        }
-
-        OrePopulator orePop = this.orePopulatorInstance; // 先读 volatile 变量
-        if (orePop == null) {
-            synchronized (coreInitLock) {
-                orePop = this.orePopulatorInstance; // 再次读取
-                if (orePop == null) {
-                    orePop = new OrePopulator(currentCore);
-                    this.orePopulatorInstance = orePop; // 写 volatile 变量
-                }
-            }
-        }
-        // 返回 Populator 列表，河流优先
-        return Arrays.asList(riverPop, orePop);
-    }
+    public @NotNull abstract List<BlockPopulator> getDefaultPopulators(@NotNull World worldInfo);
 
     /**
      * 辅助方法: 获取缓存的 BiomeProvider (线程安全)。
@@ -455,8 +418,8 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
      * @return BiomeProvider 实例，或 null 如果初始化失败。
      */
     @Nullable
-    private MyBiomeProvider getCachedBiomeProvider(@NotNull WorldInfo worldInfo) {
-        final GeneratorCore currentCore;
+    private BiomeProvider getCachedBiomeProvider(@NotNull WorldInfo worldInfo) {
+        final NoiseGeneratorCore currentCore;
         try {
             currentCore = getCore(worldInfo); // 获取 Core
         } catch (IllegalStateException e) {
@@ -464,12 +427,12 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
             return null;
         }
 
-        MyBiomeProvider provider = this.biomeProviderInstance; // 读 volatile
+        BiomeProvider provider = this.biomeProviderInstance; // 读 volatile
         if (provider == null) {
             synchronized(coreInitLock) {
                 provider = this.biomeProviderInstance; // 再次读
                 if (provider == null) {
-                    provider = new MyBiomeProvider(currentCore);
+                    provider = new BiomeProvider(currentCore);
                     this.biomeProviderInstance = provider; // 写 volatile
                 }
             }
@@ -479,18 +442,18 @@ public final class AnadphrGenerator extends ChunkGenerator { // 标记为 final
 
 
     // --- 控制生成阶段 (返回硬编码的 true/false，线程安全) ---
-    /** @return true 表示使用自定义噪声生成。 */
-    @Override public boolean shouldGenerateNoise() { return true; }
-    /** @return true 表示使用自定义地表生成。 */
-    @Override public boolean shouldGenerateSurface() { return true; }
-    /** @return true 表示使用自定义基岩生成。 */
-    @Override public boolean shouldGenerateBedrock() { return true; }
-    /** @return false 禁用默认洞穴，因为使用自定义噪声生成。 */
-    @Override public boolean shouldGenerateCaves() { return false; }
-    /** @return true 允许运行自定义 Populators 和默认装饰物（树木、花草等）。 */
-    @Override public boolean shouldGenerateDecorations() { return true; }
-    /** @return true 允许默认生物生成。 */
-    @Override public boolean shouldGenerateMobs() { return true; }
-    /** @return true 允许默认结构（村庄、神殿等）生成。 */
-    @Override public boolean shouldGenerateStructures() { return true; }
+    /** 表示使用自定义噪声生成。 */
+    @Override public abstract boolean shouldGenerateNoise();
+    /** 表示使用自定义地表生成。 */
+    @Override public abstract boolean shouldGenerateSurface();
+    /** 表示使用自定义基岩生成。 */
+    @Override public abstract boolean shouldGenerateBedrock();
+    /** 禁用默认洞穴，因为使用自定义噪声生成。 */
+    @Override public abstract boolean shouldGenerateCaves();
+    /** 允许运行自定义 Populators 和默认装饰物（树木、花草等）。 */
+    @Override public abstract boolean shouldGenerateDecorations();
+    /** 允许默认生物生成。 */
+    @Override public abstract boolean shouldGenerateMobs();
+    /** 允许默认结构（村庄、神殿等）生成。 */
+    @Override public abstract boolean shouldGenerateStructures();
 }

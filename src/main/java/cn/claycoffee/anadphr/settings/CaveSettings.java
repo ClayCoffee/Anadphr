@@ -1,4 +1,4 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.settings;
+package cn.claycoffee.anadphr.settings;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -34,12 +34,6 @@ public final class CaveSettings { // 标记为 final
         this.threshold = threshold;
     }
 
-    /**
-     * 获取一个具有推荐默认值的洞穴设置实例。
-     * 可用于快速创建具有标准洞穴形态的配置。
-     *
-     * @return 一个包含默认洞穴设置的 {@link CaveSettings} 实例。该对象是不可变的。
-     */
     @NotNull
-    public static final CaveSettings DEFAULT = new CaveSettings(0.06, 0.65); // 使用 final 静态实例确保唯一性
+    public static final CaveSettings ANADPHR = new CaveSettings(0.06, 0.65); // 使用 final 静态实例确保唯一性
 }

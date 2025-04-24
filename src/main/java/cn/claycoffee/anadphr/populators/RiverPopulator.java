@@ -1,28 +1,32 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.populators;
+package cn.claycoffee.anadphr.populators;
 
-import cn.claycoffee.anadphr.planet.anadphr.generation.GeneratorCore;
+import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
+import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
 import org.bukkit.Material;
-// import org.bukkit.World; // 避免直接使用 World，依赖 LimitedRegion
 import org.bukkit.generator.BlockPopulator;
 import org.bukkit.generator.LimitedRegion;
-import org.bukkit.generator.WorldInfo; // 引入 WorldInfo
+import org.bukkit.generator.WorldInfo;
 import org.bukkit.util.BlockVector;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*; // 引入 util.*
+import java.util.*;
 
 /**
  * BlockPopulator 实现，用于在基础地形生成后雕刻河流并填充水体。
  * 通过模拟水流从高处向低处流动来确定河流路径。
  * 设计为线程安全，仅使用传递给 populate 方法的 Random 实例和 LimitedRegion。
- * 依赖注入的 {@link GeneratorCore} 提供配置信息。
+ * 依赖注入的 {@link NoiseGeneratorCore} 提供配置信息。
  * 修正：使用 WorldInfo 获取世界高度限制。
  */
 public final class RiverPopulator extends BlockPopulator { // 标记为 final
 
     @NotNull
-    private final GeneratorCore core;
+    private final NoiseGeneratorCore core;
+
+    @NotNull
+    private final AnadphrChunkGenerator generator;
+
     // --- 河流生成参数 (硬编码或移入配置类) ---
     private static final int RIVER_SEARCH_BUFFER = 5;
     private static final int SOURCE_MIN_ALTITUDE_OFFSET = 20;
@@ -34,11 +38,12 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
 
     /**
      * 创建一个新的 RiverPopulator 实例。
-     * @param core 注入的 {@link GeneratorCore} 实例，用于访问配置。不能为空。
+     * @param generator 注入的 {@link AnadphrChunkGenerator} 实例，用于访问配置。不能为空。
      * @throws NullPointerException 如果 core 为 null。
      */
-    public RiverPopulator(@NotNull GeneratorCore core) {
-        this.core = Objects.requireNonNull(core, "GeneratorCore cannot be null");
+    public RiverPopulator(@NotNull AnadphrChunkGenerator generator) {
+        this.generator = Objects.requireNonNull(generator, "GeneratorCore cannot be null for CavePopulator");
+        this.core = generator.getCore();
     }
 
     /**
@@ -56,9 +61,6 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
     public void populate(@NotNull WorldInfo worldInfo, @NotNull Random random, int chunkX, int chunkZ, @NotNull LimitedRegion limitedRegion) {
 
         final int seaLevel = core.terrainSettings.seaLevel;
-        // **修正**: 从 worldInfo 获取高度限制
-        final int minWorldY = worldInfo.getMinHeight();
-        final int maxWorldY = worldInfo.getMaxHeight();
         final int startX = chunkX << 4;
         final int startZ = chunkZ << 4;
 
@@ -153,7 +155,7 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
             if (current.getBlockY() <= seaLevel) continue;
 
             // 传入 worldInfo
-            BlockVector lowestNeighbor = findLowestNeighbor(current, worldInfo, region, visitedInTrace, seaLevel, random);
+            BlockVector lowestNeighbor = findLowestNeighbor(current, worldInfo, region, visitedInTrace, random);
 
             if (lowestNeighbor != null) {
                 // visitedInTrace.add(lowestNeighbor); // 已在 findLowestNeighbor 中处理
@@ -171,12 +173,11 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
      * @param worldInfo 提供世界高度限制。
      * @param region 安全访问区域。
      * @param visitedInTrace 本次追踪已访问的点集合。
-     * @param seaLevel 海平面。
      * @param random 用于洗牌方向的 Random 实例。
      * @return 最低的有效邻居点，如果找不到则返回 null。
      */
     @Nullable
-    private BlockVector findLowestNeighbor(@NotNull BlockVector current, @NotNull WorldInfo worldInfo, @NotNull LimitedRegion region, @NotNull Set<BlockVector> visitedInTrace, int seaLevel, @NotNull Random random) {
+    private BlockVector findLowestNeighbor(@NotNull BlockVector current, @NotNull WorldInfo worldInfo, @NotNull LimitedRegion region, @NotNull Set<BlockVector> visitedInTrace, @NotNull Random random) {
         BlockVector bestNeighbor = null;
         int minHeightFound = current.getBlockY() + MAX_UPHILL_STEP;
         // **修正**: 从 worldInfo 获取最低高度
@@ -269,5 +270,9 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
                 }
             }
         }
+    }
+
+    public @NotNull AnadphrChunkGenerator getGenerator() {
+        return generator;
     }
 }

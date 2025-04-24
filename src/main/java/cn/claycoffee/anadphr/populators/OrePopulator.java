@@ -1,13 +1,16 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.populators;
+package cn.claycoffee.anadphr.populators;
 
-import cn.claycoffee.anadphr.planet.anadphr.generation.GeneratorCore;
-import cn.claycoffee.anadphr.planet.anadphr.generation.settings.OreConfig;
+import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
+import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
+import cn.claycoffee.anadphr.settings.OreConfig;
+import cn.claycoffee.anadphr.settings.OreSettings;
 import org.bukkit.Material;
 import org.bukkit.block.Biome;
 import org.bukkit.generator.BlockPopulator;
 import org.bukkit.generator.LimitedRegion;
-import org.bukkit.generator.WorldInfo; // 引入 WorldInfo
+import org.bukkit.generator.WorldInfo;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -15,14 +18,24 @@ import java.util.Random;
 
 /**
  * BlockPopulator 实现，用于在区块生成后填充矿物 (线程安全)。
- * 依赖 {@link GeneratorCore} 提供矿物配置和洞穴判断。
+ * 依赖 {@link NoiseGeneratorCore} 提供矿物配置和洞穴判断。
  * 仅使用传递给 populate 方法的 Random 实例和 LimitedRegion。
  * 修正：使用 WorldInfo 获取世界高度限制。
  */
 public final class OrePopulator extends BlockPopulator { // 标记为 final
 
     @NotNull
-    private final GeneratorCore core;
+    private final NoiseGeneratorCore core;
+
+    @NotNull
+    private final AnadphrChunkGenerator generator;
+
+    @NotNull
+    private final OreSettings settings;
+
+    @Nullable
+    private final CavePopulator cavePopulator;
+
     // 缓存山地生物群系列表 (静态 final，线程安全)
     private static final List<Biome> MOUNTAIN_BIOMES = List.of(/* ... 同上 ... */
             Biome.WINDSWEPT_HILLS, Biome.WINDSWEPT_GRAVELLY_HILLS, Biome.WINDSWEPT_FOREST,
@@ -31,11 +44,14 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
 
     /**
      * 创建一个新的 OrePopulator 实例。
-     * @param core 注入的 {@link GeneratorCore}。不能为空。
+     * @param generator 注入的 {@link AnadphrChunkGenerator}。不能为空。
      * @throws NullPointerException 如果 core 为 null。
      */
-    public OrePopulator(@NotNull GeneratorCore core) {
-        this.core = Objects.requireNonNull(core, "GeneratorCore cannot be null");
+    public OrePopulator(@NotNull AnadphrChunkGenerator generator, OreSettings settings, @Nullable CavePopulator cavePopulator) {
+        this.generator = Objects.requireNonNull(generator, "GeneratorCore cannot be null for CavePopulator");
+        this.core = generator.getCore();
+        this.settings = Objects.requireNonNull(settings, "OreSettings cannot be null");
+        this.cavePopulator = cavePopulator;
     }
 
     /**
@@ -60,7 +76,7 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
         final int biomeCheckY = Math.max(minHeight, Math.min(maxHeight - 1, core.terrainSettings.seaLevel + 10));
         final Biome centerBiome = limitedRegion.getBiome(centerX, biomeCheckY, centerZ);
 
-        for (OreConfig oreConfig : core.oreSettings.ores) {
+        for (OreConfig oreConfig : settings.ores) {
             if (oreConfig.oreType() == Material.EMERALD_ORE && !MOUNTAIN_BIOMES.contains(centerBiome)) {
                 continue;
             }
@@ -90,7 +106,10 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
                 final int worldX = chunkX * 16 + x;
                 final int worldZ = chunkZ * 16 + z;
 
-                final double chanceMultiplier = core.isCave(worldX, y, worldZ) ? enrichmentFactor : 1.0;
+
+                final double chanceMultiplier;
+                if(cavePopulator != null) chanceMultiplier = cavePopulator.isCave(worldX, y, worldZ) ? enrichmentFactor : 1.0;
+                else chanceMultiplier = 1.0;
                 final double finalChance = baseChance * chanceMultiplier;
 
                 // 使用传入的 random
@@ -159,5 +178,9 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
     /** 辅助方法：判断是否为山地生物群系。 */
     private boolean isMountainBiome(@NotNull Biome biome) {
         return MOUNTAIN_BIOMES.contains(biome);
+    }
+
+    public @NotNull AnadphrChunkGenerator getGenerator() {
+        return generator;
     }
 }

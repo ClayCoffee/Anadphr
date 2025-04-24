@@ -1,4 +1,4 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.settings;
+package cn.claycoffee.anadphr.settings;
 
 import org.bukkit.Material;
 import org.jetbrains.annotations.NotNull;
@@ -22,8 +22,6 @@ import java.util.Objects;
      * @param attemptsPerChunk    每个区块 (Chunk) 尝试生成该矿物的次数 (必须 >= 0)。
      * @param baseChance          每次尝试成功生成矿脉的基础几率 (0.0 到 1.0)。
      * @param caveEnrichmentFactor 在洞穴内生成时，基础几率的乘数因子 (必须 >= 1.0)。1.0 表示无富集。
-     * @throws NullPointerException 如果 oreType 为 null。
-     * @throws IllegalArgumentException 如果参数不满足约束条件 (例如 minY > maxY)。
      */
     public record OreConfig(
             @NotNull Material oreType,
@@ -40,9 +38,6 @@ import java.util.Objects;
             if (baseChance < 0.0 || baseChance > 1.0) throw new IllegalArgumentException("baseChance (" + baseChance + ") must be between 0.0 and 1.0 for OreConfig: " + oreType.name());
             if (caveEnrichmentFactor < 1.0) throw new IllegalArgumentException("caveEnrichmentFactor (" + caveEnrichmentFactor + ") must be >= 1.0 for OreConfig: " + oreType.name());
         }
-
-        // --- 预设矿物实例 ---
-        // (这些值需要根据具体 Minecraft 版本和期望的游戏平衡进行精细调整)
 
         /** 煤矿配置实例 */
         public static final OreConfig COAL = new OreConfig(Material.COAL_ORE, Material.DEEPSLATE_COAL_ORE, 0, 136, 17, 20, 0.9, 1.5);

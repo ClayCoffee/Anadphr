@@ -1,4 +1,4 @@
-package cn.claycoffee.anadphr.planet.anadphr.generation.settings;
+package cn.claycoffee.anadphr.settings;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -157,7 +157,7 @@ public final class TerrainSettings { // 标记为 final
      * @return 一个配置好的、不可变的 {@link TerrainSettings} 实例。
      */
     @NotNull
-    public static TerrainSettings getDefault(int minWorldHeight, int maxWorldHeight) {
+    public static TerrainSettings getAnadphrSettings(int minWorldHeight, int maxWorldHeight) {
         // 使用精心调整的默认值
         return new TerrainSettings(
                 63, 8, minWorldHeight, maxWorldHeight, // 基本参数
