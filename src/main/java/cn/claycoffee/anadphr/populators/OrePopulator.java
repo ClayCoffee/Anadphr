@@ -1,7 +1,7 @@
 package cn.claycoffee.anadphr.populators;
 
+import cn.claycoffee.anadphr.core.AbstractChunkGenerator;
 import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
-import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
 import cn.claycoffee.anadphr.settings.OreConfig;
 import cn.claycoffee.anadphr.settings.OreSettings;
 import org.bukkit.Material;
@@ -28,7 +28,7 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
     private final NoiseGeneratorCore core;
 
     @NotNull
-    private final AnadphrChunkGenerator generator;
+    private final AbstractChunkGenerator generator;
 
     @NotNull
     private final OreSettings settings;
@@ -44,10 +44,10 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
 
     /**
      * 创建一个新的 OrePopulator 实例。
-     * @param generator 注入的 {@link AnadphrChunkGenerator}。不能为空。
+     * @param generator 注入的 {@link AbstractChunkGenerator}。不能为空。
      * @throws NullPointerException 如果 core 为 null。
      */
-    public OrePopulator(@NotNull AnadphrChunkGenerator generator, OreSettings settings, @Nullable CavePopulator cavePopulator) {
+    public OrePopulator(@NotNull AbstractChunkGenerator generator, OreSettings settings, @Nullable CavePopulator cavePopulator) {
         this.generator = Objects.requireNonNull(generator, "GeneratorCore cannot be null for CavePopulator");
         this.core = generator.getCore();
         this.settings = Objects.requireNonNull(settings, "OreSettings cannot be null");
@@ -180,7 +180,7 @@ public final class OrePopulator extends BlockPopulator { // 标记为 final
         return MOUNTAIN_BIOMES.contains(biome);
     }
 
-    public @NotNull AnadphrChunkGenerator getGenerator() {
+    public @NotNull AbstractChunkGenerator getGenerator() {
         return generator;
     }
 }

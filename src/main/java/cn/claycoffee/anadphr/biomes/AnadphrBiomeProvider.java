@@ -8,7 +8,6 @@ import org.bukkit.generator.WorldInfo;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * 自定义的生物群系提供器 (线程安全)。
@@ -16,20 +15,10 @@ import java.util.Objects;
  * 然后调用 {@link BiomeSettings#selectBiome(BiomeSettings.BiomeSelectionInputs, TerrainSettings)}
  * 来为给定的世界坐标选择合适的生物群系。
  */
-public abstract class BiomeProvider extends org.bukkit.generator.BiomeProvider { // 标记为 final
+public final class AnadphrBiomeProvider extends BiomeProvider { // 标记为 final
 
-    /** 持有的核心生成器引用 (final, 线程安全)。 */
-    @NotNull
-    protected final NoiseGeneratorCore core;
-
-    /**
-     * 创建一个新的 BiomeProvider 实例。
-     * @param core 注入的 {@link NoiseGeneratorCore} 实例，提供所有必需的噪声和配置。不能为空。
-     * @throws NullPointerException 如果 core 为 null。
-     */
-    public BiomeProvider(@NotNull NoiseGeneratorCore core) {
-        // 确保注入的 Core 不为 null
-        this.core = Objects.requireNonNull(core, "GeneratorCore cannot be null for BiomeProvider");
+    public AnadphrBiomeProvider(@NotNull NoiseGeneratorCore core) {
+        super(core);
     }
 
     /**
@@ -45,7 +34,29 @@ public abstract class BiomeProvider extends org.bukkit.generator.BiomeProvider {
      */
     @Override
     @NotNull
-    public abstract Biome getBiome(@NotNull WorldInfo worldInfo, int x, int y, int z);
+    public Biome getBiome(@NotNull WorldInfo worldInfo, int x, int y, int z) {
+        // 1. 从 Core 获取所有基础噪声参数
+        final NoiseGeneratorCore.BiomeParameterBundle noiseParams = core.getBiomeParameters(x, z);
+
+        if(noiseParams == null) return Biome.THE_VOID; // fallback
+
+        // 2. 计算当前 (X, Z) 的地表高度，这对海拔判断至关重要
+        // 即使传入了 y，我们也需要地表高度来正确应用海拔影响
+        final int terrainHeight = core.calculateTerrainHeight(x, z);
+
+        // 3. 构建传递给 selectBiome 的输入对象
+        // 使用传入的 y 作为 'altitude'，因为它可能是 Bukkit 关心的查询高度
+        final BiomeSettings.BiomeSelectionInputs inputs = new BiomeSettings.BiomeSelectionInputs(
+                noiseParams.temperature(), noiseParams.humidity(), noiseParams.continentalness(),
+                noiseParams.erosion(), noiseParams.peaksValleys(), noiseParams.weirdness(),
+                y,               // 当前查询点的 Y 坐标
+                terrainHeight,   // 该XZ坐标的实际地表高度
+                core.terrainSettings.seaLevel, // 从 Core 获取海平面
+                noiseParams.dither()           // 抖动噪声
+        );
+
+        return core.biomeSettings.selectBiome(inputs, core.terrainSettings);
+    }
 
     /**
      * 返回此生成器可能生成的所有生物群系的列表。
@@ -55,9 +66,8 @@ public abstract class BiomeProvider extends org.bukkit.generator.BiomeProvider {
      */
     @Override
     @NotNull
-    public abstract List<Biome> getBiomes(@NotNull WorldInfo worldInfo);
-
-    public @NotNull NoiseGeneratorCore getCore() {
-        return core;
+    public List<Biome> getBiomes(@NotNull WorldInfo worldInfo) {
+        // 直接返回 Core 中存储的不可修改列表
+        return core.biomeSettings.allowedBiomes;
     }
 }

@@ -1,7 +1,7 @@
 package cn.claycoffee.anadphr.populators;
 
+import cn.claycoffee.anadphr.core.AbstractChunkGenerator;
 import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
-import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
 import cn.claycoffee.anadphr.settings.CaveSettings;
 import cn.claycoffee.anadphr.settings.TerrainSettings;
 import org.bukkit.Material;
@@ -25,7 +25,7 @@ public final class CavePopulator extends BlockPopulator {
     private final NoiseGeneratorCore core;
 
     @NotNull
-    private final AnadphrChunkGenerator generator;
+    private final AbstractChunkGenerator generator;
 
     @NotNull
     private final CaveSettings settings;
@@ -35,10 +35,10 @@ public final class CavePopulator extends BlockPopulator {
 
     /**
      * 创建一个新的 CavePopulator 实例。
-     * @param generator 注入的 {@link AnadphrChunkGenerator} 实例。不能为空。
+     * @param generator 注入的 {@link AbstractChunkGenerator} 实例。不能为空。
      * @throws NullPointerException 如果 core 为 null。
      */
-    public CavePopulator(@NotNull AnadphrChunkGenerator generator, CaveSettings settings) {
+    public CavePopulator(@NotNull AbstractChunkGenerator generator, CaveSettings settings) {
         this.generator = Objects.requireNonNull(generator, "GeneratorCore cannot be null for CavePopulator");
         this.core = generator.getCore();
         this.settings = Objects.requireNonNull(settings, "CaveSettings cannot be null for CavePopulator");
@@ -66,11 +66,6 @@ public final class CavePopulator extends BlockPopulator {
         final int chunkMinX = chunkX << 4;
         final int chunkMinZ = chunkZ << 4;
 
-        // 优化: 仅遍历当前区块 (0-15) 还是整个 LimitedRegion？
-        // 遍历整个 LimitedRegion 可以确保洞穴在区块边界处平滑连接，但计算量稍大。
-        // 这里选择遍历当前区块，依赖邻近区块的 Populator 处理连接。
-        // 如果需要更完美的边界连接，应遍历整个 LimitedRegion 范围。
-
         for (int x = 0; x < 16; x++) {
             final int worldX = chunkMinX + x;
             for (int z = 0; z < 16; z++) {
@@ -87,17 +82,12 @@ public final class CavePopulator extends BlockPopulator {
                         continue;
                     }
 
-                    // --- 洞穴判断 ---
-                    // 调用 GeneratorCore 的 isCave 方法判断当前坐标是否应为洞穴
                     if (isCave(worldX, y, worldZ)) {
-                        // --- 洞穴处理 ---
-                        // 获取当前位置的方块类型
                         Material currentMaterial = limitedRegion.getType(worldX, y, worldZ);
 
                         // 只替换固体方块 (避免挖掉空气或已有的水)
                         // 同时也避免替换基岩
                         if (currentMaterial.isSolid() && currentMaterial != Material.BEDROCK) {
-                            // --- 水下洞穴处理 ---
                             // 如果洞穴位置在海平面或以下
                             if (y <= seaLevel) {
                                 // 检查下方方块，如果下方是空气，则这里也保持空气（形成竖井）
@@ -112,10 +102,10 @@ public final class CavePopulator extends BlockPopulator {
                                 limitedRegion.setType(worldX, y, worldZ, Material.AIR);
                             }
                         }
-                    } // 结束 isCave 判断
-                } // 结束 y 循环
-            } // 结束 z 循环
-        } // 结束 x 循环
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -137,7 +127,7 @@ public final class CavePopulator extends BlockPopulator {
         return noiseValue > settings.threshold;
     }
 
-    public @NotNull AnadphrChunkGenerator getGenerator() {
+    public @NotNull AbstractChunkGenerator getGenerator() {
         return generator;
     }
 }

@@ -1,8 +1,8 @@
 package cn.claycoffee.anadphr;
 
+import cn.claycoffee.anadphr.core.AbstractChunkGenerator;
 import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
 import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
-import cn.claycoffee.anadphr.planet.anadphr.generation.CustomChunkGenerator;
 import cn.claycoffee.anadphr.settings.BiomeSettings;
 import cn.claycoffee.anadphr.settings.TerrainSettings;
 import org.bukkit.Server;
@@ -19,7 +19,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * 主插件类，负责注册自定义世界生成器 {@link AnadphrChunkGenerator}。
+ * 主插件类，负责注册自定义世界生成器 {@link AbstractChunkGenerator}。
  * 它使用线程安全的 {@link ConcurrentHashMap} 来缓存每个世界的 {@link NoiseGeneratorCore} 实例，
  * 以支持多世界配置和 Folia 的并发环境。
  * 可以通过配置文件（如果实现）或基于世界名/ID 加载不同的生成设置。
@@ -57,12 +57,12 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
      * Bukkit 调用此方法为指定世界获取区块生成器实例。
      * 这是插件与 Bukkit 世界生成机制交互的主要入口点。
      * 此实现是线程安全的，它原子性地查找或创建与世界名关联的 {@link NoiseGeneratorCore}，
-     * 并将其注入到新的 {@link AnadphrChunkGenerator} 实例中。
+     * 并将其注入到新的 {@link AbstractChunkGenerator} 实例中。
      *
      * @param worldName 请求生成器的世界名称。不能为空。
      * @param id        可选的生成器 ID (例如来自命令 `-g PluginName:id`)。可以为 null。
      * 此 ID 可用于加载特定的世界生成配置。
-     * @return 一个配置好的 {@link AnadphrChunkGenerator} 实例。在极少数初始化失败的情况下可能返回 null。
+     * @return 一个配置好的 {@link AbstractChunkGenerator} 实例。在极少数初始化失败的情况下可能返回 null。
      */
     @Override
     @Nullable // 返回值理论上不为 null，除非 Core 创建失败
@@ -102,7 +102,7 @@ public final class AnadphrCore extends JavaPlugin { // 标记为 final
 
             // 返回注入了正确 GeneratorCore 的 MyChunkGenerator 实例
             LOGGER.info("为世界 '" + worldName + "' 提供了配置好的 MyChunkGenerator 实例。");
-            return new CustomChunkGenerator(coreToUse);
+            return new AnadphrChunkGenerator(coreToUse);
         }
         return null;
     }

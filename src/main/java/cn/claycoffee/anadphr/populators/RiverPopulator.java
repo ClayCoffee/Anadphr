@@ -1,7 +1,7 @@
 package cn.claycoffee.anadphr.populators;
 
+import cn.claycoffee.anadphr.core.AbstractChunkGenerator;
 import cn.claycoffee.anadphr.core.NoiseGeneratorCore;
-import cn.claycoffee.anadphr.planet.anadphr.generation.AnadphrChunkGenerator;
 import org.bukkit.Material;
 import org.bukkit.generator.BlockPopulator;
 import org.bukkit.generator.LimitedRegion;
@@ -25,7 +25,7 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
     private final NoiseGeneratorCore core;
 
     @NotNull
-    private final AnadphrChunkGenerator generator;
+    private final AbstractChunkGenerator generator;
 
     // --- 河流生成参数 (硬编码或移入配置类) ---
     private static final int RIVER_SEARCH_BUFFER = 5;
@@ -38,10 +38,10 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
 
     /**
      * 创建一个新的 RiverPopulator 实例。
-     * @param generator 注入的 {@link AnadphrChunkGenerator} 实例，用于访问配置。不能为空。
+     * @param generator 注入的 {@link AbstractChunkGenerator} 实例，用于访问配置。不能为空。
      * @throws NullPointerException 如果 core 为 null。
      */
-    public RiverPopulator(@NotNull AnadphrChunkGenerator generator) {
+    public RiverPopulator(@NotNull AbstractChunkGenerator generator) {
         this.generator = Objects.requireNonNull(generator, "GeneratorCore cannot be null for CavePopulator");
         this.core = generator.getCore();
     }
@@ -272,7 +272,7 @@ public final class RiverPopulator extends BlockPopulator { // 标记为 final
         }
     }
 
-    public @NotNull AnadphrChunkGenerator getGenerator() {
+    public @NotNull AbstractChunkGenerator getGenerator() {
         return generator;
     }
 }

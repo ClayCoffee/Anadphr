@@ -6,6 +6,7 @@ import org.bukkit.Material;
 import org.bukkit.util.noise.SimplexNoiseGenerator;
 import org.bukkit.util.noise.SimplexOctaveGenerator;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.Random;
@@ -19,7 +20,7 @@ public final class NoiseGeneratorCore { // 标记为 final
 
     // --- 配置实例 (final, 保证线程安全) ---
     @NotNull public final TerrainSettings terrainSettings;
-    @NotNull public final BiomeSettings biomeSettings;
+    @Nullable public final BiomeSettings biomeSettings;
 
     // --- 噪声生成器 (final, 线程安全) ---
     private final SimplexOctaveGenerator baseTerrainNoise;
@@ -43,15 +44,15 @@ public final class NoiseGeneratorCore { // 标记为 final
      *
      * @param seed            世界种子，用于初始化所有噪声生成器以确保确定性。
      * @param terrainSettings 地形生成配置。不能为空。
-     * @param biomeSettings   生物群系生成配置。不能为空。
+     * @param biomeSettings   生物群系生成配置。
      * @throws NullPointerException 如果任何 Settings 对象为 null。
      */
     public NoiseGeneratorCore(long seed,
-                              @NotNull TerrainSettings terrainSettings, @NotNull BiomeSettings biomeSettings) {
+                              @NotNull TerrainSettings terrainSettings, @Nullable BiomeSettings biomeSettings) {
 
         // 校验并存储传入的配置
         this.terrainSettings = Objects.requireNonNull(terrainSettings, "TerrainSettings cannot be null");
-        this.biomeSettings = Objects.requireNonNull(biomeSettings, "BiomeSettings cannot be null");
+        this.biomeSettings = biomeSettings;
 
         this.seed = seed;
         // 从主种子派生用于确定性随机的种子
@@ -113,8 +114,6 @@ public final class NoiseGeneratorCore { // 标记为 final
         // 基础高度偏移量，使平均地表在海平面以上
         final int baseHeightOffset = terrainSettings.seaLevel + 5;
         final int finalHeight = (int) (baseHeightOffset + combinedNoise);
-        // 使用 Math.clamp (如果 Java 版本支持) 或 Math.max/min 限制高度
-        // return Math.clamp(finalHeight, terrainSettings.minHeight + 1, terrainSettings.maxHeight - 1);
         return Math.max(terrainSettings.minHeight + 1, Math.min(finalHeight, terrainSettings.maxHeight - 1));
     }
 
@@ -168,8 +167,11 @@ public final class NoiseGeneratorCore { // 标记为 final
      * @param z 世界 Z 坐标。
      * @return 包含所有必需噪声值的 {@link BiomeParameterBundle}。
      */
-    @NotNull
+    @Nullable
     public BiomeParameterBundle getBiomeParameters(int x, int z) {
+        if(biomeSettings == null) {
+            return null;
+        }
         // 频率参数 (来自对应 Settings 对象)
         final double tempFreq = biomeSettings.temperatureFrequency;
         final double humFreq = biomeSettings.humidityFrequency;

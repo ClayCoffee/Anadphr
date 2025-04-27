@@ -13,7 +13,7 @@ import java.util.Objects;
  * 这个类的核心是 {@link #selectBiome(BiomeSelectionInputs, TerrainSettings)} 方法，
  * 它根据多种环境因素决定一个坐标点的最终生物群系。
  */
-public final class BiomeSettings { // 标记为 final
+public final class BiomeSettings {
 
     /** 温度基础噪声频率。影响温度变化区域的大小。 (> 0) */
     public final double temperatureFrequency;
@@ -126,6 +126,7 @@ public final class BiomeSettings { // 标记为 final
     private enum ClimateZone { FROZEN, COLD, TEMPERATE, HOT }
 
     /**
+     * 这是一个内置的默认生物群系选择逻辑。
      * 根据输入的噪声和环境参数选择最合适的生物群系。
      * 这是生成逻辑的核心，它整合了温度、湿度、海拔、大陆性、侵蚀度、山峰/河谷度、怪异度和抖动噪声，
      * 通过一系列优先级判断和气候带划分来决定最终的生物群系。
@@ -256,11 +257,6 @@ public final class BiomeSettings { // 标记为 final
                 if (effectiveHumidity > 0.8 && inputs.erosion < -0.1) yield Biome.BAMBOO_JUNGLE; // 竹林
                 yield (effectiveHumidity < 0.7) ? Biome.SPARSE_JUNGLE : Biome.JUNGLE; // 稀疏 vs 茂密丛林
             }
-            // default case for switch expression (理论上不应执行，但作为保险)
-            // default -> {
-            //     System.err.println("Warning: Biome selection fallback reached for inputs: " + inputs);
-            //     yield Biome.PLAINS;
-            // }
         };
     }
 }
